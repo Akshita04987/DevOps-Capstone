@@ -1,0 +1,79 @@
+- name: Prepare the workstation and deploy the notes platform
+  hosts: local
+  gather_facts: false
+  vars:
+    repo_root: "{{ playbook_dir }}/.."
+    kind_version: v0.33.0
+
+  tasks:
+    - name: Check that Docker and Terraform are available
+      ansible.builtin.command: "which {{ item }}"
+      loop: [docker, terraform]
+      changed_when: false
+      tags: [tools]
+
+    - name: Install kind
+      ansible.builtin.get_url:
+        url: "https://kind.sigs.k8s.io/dl/{{ kind_version }}/kind-linux-amd64"
+        dest: /usr/local/bin/kind
+        mode: "0755"
+      tags: [tools]
+
+    - name: Check whether kubectl is installed
+      ansible.builtin.stat:
+        path: /usr/local/bin/kubectl
+      register: kubectl_bin
+      tags: [tools]
+
+    - name: Find the latest stable kubectl version
+      ansible.builtin.uri:
+        url: https://dl.k8s.io/release/stable.txt
+        return_content: true
+      register: kubectl_stable
+      when: not kubectl_bin.stat.exists
+      tags: [tools]
+
+    - name: Install kubectl
+      ansible.builtin.get_url:
+        url: "https://dl.k8s.io/release/{{ kubectl_stable.content | trim }}/bin/linux/amd64/kubectl"
+        dest: /usr/local/bin/kubectl
+        mode: "0755"
+      when: not kubectl_bin.stat.exists
+      tags: [tools]
+
+    - name: Check that Terraform created the database secret
+      ansible.builtin.command: kubectl -n notes get secret db-credentials
+      changed_when: false
+      tags: [deploy]
+
+    - name: Deploy the database
+      ansible.builtin.command: "kubectl apply -f {{ repo_root }}/k8s/10-postgres.yaml"
+      register: db_apply
+      changed_when: "'created' in db_apply.stdout or 'configured' in db_apply.stdout"
+      tags: [deploy]
+
+    - name: Deploy the application
+      ansible.builtin.command: "kubectl apply -f {{ repo_root }}/k8s/20-app.yaml"
+      register: app_apply
+      changed_when: "'created' in app_apply.stdout or 'configured' in app_apply.stdout"
+      tags: [deploy]
+
+    - name: Wait for the database to be ready
+      ansible.builtin.command: kubectl -n notes rollout status statefulset/postgres --timeout=240s
+      changed_when: false
+      tags: [deploy]
+
+    - name: Wait for the application to be ready
+      ansible.builtin.command: kubectl -n notes rollout status deployment/notes-app --timeout=240s
+      changed_when: false
+      tags: [deploy]
+
+    - name: Smoke test the application
+      ansible.builtin.uri:
+        url: http://localhost:8080/health
+        status_code: 200
+      register: health
+      retries: 20
+      delay: 3
+      until: health.status == 200
+      tags: [deploy]
