@@ -6,3 +6,4 @@ __pycache__/
 *.tfstate.*
 *.deb
 *.log
+.pytest_cache/

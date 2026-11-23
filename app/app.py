@@ -105,7 +105,8 @@ def metrics():
     return Response(generate_latest(), content_type=CONTENT_TYPE_LATEST)
 
 
-init_db()
+if os.getenv("SKIP_DB_INIT") != "1":
+    init_db()
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
