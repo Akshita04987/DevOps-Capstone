@@ -32,7 +32,6 @@ jobs:
         run: cd app && SKIP_DB_INIT=1 pytest -q
 
       - name: Dependency vulnerability scan
-        continue-on-error: true
         run: pip-audit -r app/requirements.txt
 
   integration:
