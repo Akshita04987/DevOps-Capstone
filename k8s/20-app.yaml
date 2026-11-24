@@ -89,11 +89,14 @@ kind: Service
 metadata:
   name: notes-app
   namespace: notes
+  labels:
+    app: notes-app
 spec:
   type: NodePort
   selector:
     app: notes-app
   ports:
-    - port: 80
+    - name: http
+      port: 80
       targetPort: 5000
       nodePort: 30080
