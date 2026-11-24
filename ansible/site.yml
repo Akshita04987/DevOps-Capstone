@@ -49,7 +49,7 @@
     - name: Deploy the database
       ansible.builtin.command: "kubectl apply -f {{ repo_root }}/k8s/10-postgres.yaml"
       register: db_apply
-      changed_when: "'created' in db_apply.stdout or 'configured' in db_apply.stdout"
+      changed_when: "' created' in db_apply.stdout"
       tags: [deploy]
 
     - name: Deploy the application
@@ -77,3 +77,57 @@
       delay: 3
       until: health.status == 200
       tags: [deploy]
+
+    - name: Install Helm
+      ansible.builtin.shell: curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+      args:
+        creates: /usr/local/bin/helm
+      tags: [tools]
+
+    - name: Add Helm repositories
+      ansible.builtin.command: "helm repo add {{ item.name }} {{ item.url }} --force-update"
+      loop:
+        - { name: prometheus-community, url: "https://prometheus-community.github.io/helm-charts" }
+        - { name: grafana, url: "https://grafana.github.io/helm-charts" }
+      changed_when: false
+      tags: [monitoring]
+
+    - name: Install Prometheus and Grafana
+      ansible.builtin.command: >
+        helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack
+        --namespace monitoring --values {{ repo_root }}/monitoring/kube-prometheus-stack-values.yaml
+        --wait --timeout 10m
+      register: kps
+      changed_when: "'REVISION: 1' in kps.stdout"
+      tags: [monitoring]
+
+    - name: Install Loki
+      ansible.builtin.command: "kubectl apply -f {{ repo_root }}/monitoring/loki.yaml"
+      register: loki_apply
+      changed_when: "' created' in loki_apply.stdout"
+      tags: [monitoring]
+
+    - name: Install the Alloy log collector
+      ansible.builtin.command: >
+        helm upgrade --install alloy grafana/alloy
+        --namespace monitoring --values {{ repo_root }}/monitoring/alloy-values.yaml
+        --wait --timeout 5m
+      register: alloy
+      changed_when: "'REVISION: 1' in alloy.stdout"
+      tags: [monitoring]
+
+    - name: Apply the app monitor, alert rules and dashboard
+      ansible.builtin.command: "kubectl apply -f {{ repo_root }}/monitoring/notes-observability.yaml"
+      register: obs_apply
+      changed_when: "' created' in obs_apply.stdout"
+      tags: [monitoring]
+
+    - name: Check that Prometheus is ready
+      ansible.builtin.uri:
+        url: http://localhost:9090/-/ready
+        status_code: 200
+      register: prom
+      retries: 20
+      delay: 5
+      until: prom.status == 200
+      tags: [monitoring]

@@ -1,7 +1,7 @@
 .RECIPEPREFIX = >
 ANSIBLE = ansible-playbook -i ansible/inventory.ini ansible/site.yml
 TF = terraform
-.PHONY: help up down tools cluster platform deploy status
+.PHONY: help up down tools cluster platform deploy monitoring status
 
 help:
 > @echo "make up        build everything: tools, cluster, platform, app"
@@ -9,7 +9,7 @@ help:
 > @echo "make status    show nodes and pods"
 > @echo "make tools | cluster | platform | deploy   run a single stage"
 
-up: tools cluster platform deploy
+up: tools cluster platform deploy monitoring
 
 tools:
 > $(ANSIBLE) --tags tools
@@ -30,3 +30,6 @@ status:
 down:
 > -cd infra/terraform/platform && $(TF) destroy -auto-approve -input=false
 > cd infra/terraform/cluster && $(TF) destroy -auto-approve -input=false
+
+monitoring:
+> $(ANSIBLE) --tags monitoring
