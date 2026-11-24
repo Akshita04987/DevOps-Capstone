@@ -28,7 +28,9 @@ resource "kubernetes_namespace_v1" "notes" {
   metadata {
     name = "notes"
     labels = {
-      "app.kubernetes.io/part-of" = "devops-capstone"
+      "app.kubernetes.io/part-of"                  = "devops-capstone"
+      "pod-security.kubernetes.io/enforce"         = "baseline"
+      "pod-security.kubernetes.io/enforce-version" = "latest"
     }
   }
 }
