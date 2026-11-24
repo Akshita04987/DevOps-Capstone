@@ -1,0 +1,47 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-restore
+  namespace: notes
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: restore
+          image: postgres:16
+          command: ["sh", "-c"]
+          args:
+            - |
+              set -e
+              FILE=$(ls -1t /backups/*.dump | head -n 1)
+              echo "Restoring from $FILE"
+              pg_restore --clean --if-exists --no-owner -d "$PGDATABASE" "$FILE"
+              echo "Restore complete"
+          env:
+            - name: PGHOST
+              value: db
+            - name: PGUSER
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: password
+            - name: PGDATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: db-credentials
+                  key: database
+          volumeMounts:
+            - name: backups
+              mountPath: /backups
+              readOnly: true
+      volumes:
+        - name: backups
+          persistentVolumeClaim:
+            claimName: postgres-backups

@@ -131,3 +131,9 @@
       delay: 5
       until: prom.status == 200
       tags: [monitoring]
+
+    - name: Deploy the database backup job
+      ansible.builtin.command: "kubectl apply -f {{ repo_root }}/k8s/30-backup.yaml"
+      register: backup_apply
+      changed_when: "' created' in backup_apply.stdout"
+      tags: [deploy]
